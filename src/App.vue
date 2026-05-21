@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, reactive, watch } from 'vue'
+import { useClipboard, useStorage } from '@vueuse/core'
+import { computed, reactive, ref } from 'vue'
 
 import RatingCriterion from '@/components/RatingCriterion.vue'
 import { criteria } from '@/config/ratingCriteria'
@@ -7,66 +8,41 @@ import type { CriterionId } from '@/types/rating'
 
 const WEIGHTS_STORAGE_KEY = 'speaker-rate:criterion-weights'
 
+const copyError = ref(false)
+
 const scores = reactive<Record<CriterionId, number>>({
-  relevance: 5,
-  novelty: 5,
-  practicality: 5,
-  structure: 5,
-  speaker: 5,
-  trust: 5,
+  relevance: 2,
+  novelty: 2,
+  practicality: 2,
+  structure: 2,
+  speaker: 2,
+  trust: 2,
 })
 
-const weights = reactive<Record<CriterionId, number>>({
+const defaultWeights: Record<CriterionId, number> = {
   relevance: 2,
   novelty: 1.25,
   practicality: 2,
   structure: 1,
   speaker: 1.25,
   trust: 1.5,
-})
-
-const isCriterionId = (id: string): id is CriterionId =>
-  criteria.some((criterion) => criterion.id === id)
-
-const restoreWeights = () => {
-  const savedWeights = localStorage.getItem(WEIGHTS_STORAGE_KEY)
-
-  if (!savedWeights) return
-
-  try {
-    const parsedWeights = JSON.parse(savedWeights) as Partial<Record<CriterionId, unknown>>
-
-    Object.entries(parsedWeights).forEach(([id, weight]) => {
-      if (isCriterionId(id) && typeof weight === 'number' && weight >= 0 && weight <= 5) {
-        weights[id] = weight
-      }
-    })
-  } catch {
-    localStorage.removeItem(WEIGHTS_STORAGE_KEY)
-  }
 }
 
-restoreWeights()
-
-watch(
-  weights,
-  (currentWeights) => {
-    localStorage.setItem(WEIGHTS_STORAGE_KEY, JSON.stringify(currentWeights))
-  },
-  { deep: true },
-)
+const weights = useStorage<Record<CriterionId, number>>(WEIGHTS_STORAGE_KEY, defaultWeights, localStorage, {
+  mergeDefaults: true,
+})
 
 const totalScore = computed(() => {
-  const totalWeight = criteria.reduce((total, criterion) => total + weights[criterion.id], 0)
+  const totalWeight = criteria.reduce((total, criterion) => total + weights.value[criterion.id], 0)
 
   if (totalWeight === 0) return 0
 
   const weightedSum = criteria.reduce(
-    (total, criterion) => total + scores[criterion.id] * weights[criterion.id],
+    (total, criterion) => total + scores[criterion.id] * weights.value[criterion.id],
     0,
   )
 
-  return Math.round((weightedSum / totalWeight) * 10) / 10
+  return Math.round((weightedSum / totalWeight / 3) * 100) / 10
 })
 
 const scoreLabel = computed(() => {
@@ -76,6 +52,55 @@ const scoreLabel = computed(() => {
 
   return 'Слабое соответствие'
 })
+
+const getScoreDescription = (criterionId: CriterionId) => {
+  const criterion = criteria.find((item) => item.id === criterionId)
+
+  return criterion?.scoreDescriptions[scores[criterionId]] ?? 'Описание оценки не задано.'
+}
+
+const resultsText = computed(() => {
+  const criteriaResults = criteria
+    .map((criterion) => {
+      const score = scores[criterion.id]
+      const weight = weights.value[criterion.id].toFixed(1)
+
+      return `${criterion.title}: ${score}/3, вес ${weight}. ${getScoreDescription(criterion.id)}`
+    })
+    .join('\n')
+
+  return [
+    `Итоговая оценка: ${totalScore.value.toFixed(1)} из 10`,
+    `Вердикт: ${scoreLabel.value}`,
+    '',
+    'Оценки по критериям:',
+    criteriaResults,
+  ].join('\n')
+})
+
+const { copy, copied, isSupported: isClipboardSupported } = useClipboard({
+  source: resultsText,
+  copiedDuring: 1800,
+})
+
+const copyStatus = computed(() => {
+  if (copied.value) return 'Скопировано'
+  if (copyError.value) return 'Не удалось скопировать'
+
+  return ''
+})
+
+const copyResults = async () => {
+  copyError.value = false
+
+  try {
+    if (!isClipboardSupported.value) throw new Error('Clipboard API is not supported')
+
+    await copy()
+  } catch {
+    copyError.value = true
+  }
+}
 </script>
 
 <template>
@@ -111,6 +136,10 @@ const scoreLabel = computed(() => {
         <p>
           Общая оценка рассчитывается как взвешенное среднее: оценка критерия умножается на его вес.
         </p>
+        <div class="copy-results">
+          <button class="copy-button" type="button" @click="copyResults">Скопировать результаты</button>
+          <span aria-live="polite">{{ copyStatus }}</span>
+        </div>
       </footer>
     </section>
   </main>
@@ -208,8 +237,8 @@ h1 {
 
 .criteria-list {
   display: grid;
-  gap: 14px;
-  margin-top: 28px;
+  gap: 6px;
+  margin-top: 18px;
 }
 
 .result {
@@ -253,6 +282,34 @@ h1 {
   line-height: 1.45;
 }
 
+.copy-results {
+  display: grid;
+  gap: 6px;
+  justify-items: end;
+}
+
+.copy-button {
+  min-height: 44px;
+  padding: 0 16px;
+  border: 1px solid rgba(47, 111, 103, 0.24);
+  border-radius: 8px;
+  color: #fff;
+  background: #2f6f67;
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.copy-button:hover {
+  background: #285f58;
+}
+
+.copy-results span {
+  min-height: 1.2em;
+  color: #2f6f67;
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
 @media (max-width: 720px) {
   .page-shell {
     padding: 16px;
@@ -270,6 +327,10 @@ h1 {
 
   .total-card {
     width: 100%;
+  }
+
+  .copy-results {
+    justify-items: stretch;
   }
 }
 </style>

@@ -15,6 +15,8 @@ const isWeightOpen = ref(false)
 const scoreDescription = computed(
   () => props.criterion.scoreDescriptions[score.value] ?? 'Описание для этой оценки не задано.',
 )
+
+const scoreToneClass = computed(() => `score-value--${score.value}`)
 </script>
 
 <template>
@@ -31,10 +33,10 @@ const scoreDescription = computed(
           class="score-slider"
           type="range"
           min="0"
-          max="10"
+          max="3"
           step="1"
         />
-        <output class="score-value">{{ score }}</output>
+        <output :class="['score-value', scoreToneClass]">{{ score }}</output>
         <button
           :aria-expanded="isWeightOpen"
           :aria-label="`Настроить вес: ${criterion.title}`"
@@ -75,19 +77,19 @@ const scoreDescription = computed(
 .criterion {
   display: grid;
   grid-template-columns: minmax(220px, 1fr) minmax(280px, 420px);
-  gap: 28px;
+  gap: 22px;
   align-items: center;
-  padding: 20px 0;
+  padding: 12px 0;
   border-bottom: 1px solid rgba(23, 32, 38, 0.09);
 }
 
 .criterion-copy {
   display: grid;
-  gap: 6px;
+  gap: 4px;
 }
 
 .criterion-title {
-  font-size: 1.05rem;
+  font-size: 1rem;
   font-weight: 800;
 }
 
@@ -98,7 +100,7 @@ const scoreDescription = computed(
 
 .slider-control {
   display: grid;
-  gap: 10px;
+  gap: 6px;
 }
 
 .score-toolbar {
@@ -115,18 +117,37 @@ const scoreDescription = computed(
 
 .score-value {
   display: grid;
-  min-height: 44px;
-  border: 1px solid rgba(23, 32, 38, 0.14);
+  min-height: 40px;
+  border: 1px solid transparent;
   border-radius: 8px;
-  background: #f8faf9;
   font-weight: 800;
   place-items: center;
+}
+
+.score-value--0 {
+  color: #7a1616;
+  background: #f8d7da;
+}
+
+.score-value--1 {
+  color: #7a3a00;
+  background: #ffe0b2;
+}
+
+.score-value--2 {
+  color: #4d5f00;
+  background: #e7f5a4;
+}
+
+.score-value--3 {
+  color: #14532d;
+  background: #bbf7d0;
 }
 
 .weight-toggle {
   display: grid;
   width: 48px;
-  min-height: 44px;
+  min-height: 40px;
   border: 1px solid rgba(23, 32, 38, 0.14);
   border-radius: 8px;
   color: #34474f;
@@ -146,7 +167,7 @@ const scoreDescription = computed(
 }
 
 .score-hint {
-  min-height: 2.7em;
+  min-height: 1.35em;
   color: #4f6563;
   font-size: 0.94rem;
   font-weight: 700;
@@ -158,7 +179,7 @@ const scoreDescription = computed(
   grid-template-columns: minmax(120px, 1fr) minmax(150px, 220px);
   gap: 14px;
   align-items: center;
-  padding: 10px 12px;
+  padding: 8px 10px;
   border: 1px solid rgba(23, 32, 38, 0.1);
   border-radius: 8px;
   background: rgba(248, 250, 249, 0.76);
